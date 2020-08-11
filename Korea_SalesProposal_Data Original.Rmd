@@ -1,0 +1,246 @@
+---
+title: "Korea_SalesProposal_Data"
+author: "Tass Tsakiridis"
+date: "01/06/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(salesforcer)
+library(tidyverse)
+
+# Using OAuth 2.0 authentication
+salesforcer::sf_auth(token ="token.rds")
+
+# Name of core object to query data from
+objectToQuery <- "PMI_Actual__c"
+
+# Name of market
+marketName <- "Korea"
+
+# Name of Sales Proposal RecordType
+recordTypeName <- "Sales Proposal"
+
+# Korea Users and Teams
+teams <- list("Jeon YongDeuk"=c("SL1"), 
+              "Hong Seung-pyo"=c("SL1"),
+              "Park Jin-Hwan"=c("SL1"),
+              "Choi Ki-Chang"=c("SL1"),
+              "Jeon Jongdae"=c("SL1"),
+              "Kang Jong-Hee"=c("SL1"),
+              "Jung Hyun-Joon"=c("SL1"),
+              "Ko Dohoon"=c("SL1"),
+              "Ko Jin-Moon"=c("SL2"),
+              "Kim Seok Won"=c("SL2"),
+              "Kim Jun-seong"=c("SL2"),
+              "Kang Changu"=c("SL3"),
+              "Kim Heon-Chan"=c("SL3"),
+              "Park MinHo"=c("SL3"),
+              "Ko Jun-young"=c("SL3"),
+              "Han Jun-Sung"=c("SL3"),
+              "Hyeon-Seop Song"=c("SL3"))
+
+# Financial Year Month descriptors
+fyMonths <- list("May"=c("01 May"),
+                 "June"=c("02 June"),
+                 "July"=c("03 July"),
+                 "August"=c("04 August"),
+                 "September"=c("05 September"),
+                 "October"=c("06 October"),
+                 "November"=c("07 November"),
+                 "December"=c("08 December"),
+                 "January"=c("09 January"),
+                 "February"=c("10 February"),
+                 "March"=c("11 March"),
+                 "April"=c("12 April"))
+
+
+
+# Local fields from the PMI_Actual__c object
+# Id                  [String]
+# Name                [String]
+# Act_Qty__c          [Number]
+# Activity__c         [String]
+# Actual_Net_Sales__c [Currency]
+# Brand_Name__c       [String]
+# Month_Name__c       [String]
+# Plan_Qty__c         [Number]
+# Product_Name__c     [String]
+# Product_Pack_Qty__c [Number]
+
+# Fields from the Promotion_Material_Item__c object - the Product details
+# Free_Bottle_COGS__c               [Currency]
+# Free_Bottle_Quantity__c           [Number]
+# Plan_COGS__c                      [Currency]
+# Plan_Net_Sales__c                 [Currency]
+# Plan_Qty_9L__c                    [Number]
+# Plan_Rebate__c                    [Currency]
+# Product_Gross_Selling_Price__c    [Currency]
+# Product_Selling_Price__c          [Currency]
+# Target_Qty__c                     [Number]
+# Target_Qty_9L__c                  [Number]
+# Total_Product_A_P__c              [Currency]
+# Wholesaler_Discount__c            [Percent]
+
+# Fields from the Promotion__c object - the Account details
+# Account_Region__c   [String]
+# AccountName__c      [String]
+# Area__c             [String]
+# City__c             [String]
+# Group__c            [String]
+# Outlet_Class__c     [String]
+# SubGroup__c         [String]
+
+# SOQL Query
+# Fields from the Promotion_Activity__c object
+# Name                [String]
+# Owner.Name          [String]
+
+
+soqlQuery = sprintf("SELECT Id, Name, 
+                    A_P_Item_Product_Name__c,
+                    A_P_Item_Brand_Code__c,
+                    A_P_Item_Brand_Name__c,
+                    Act_Qty__c, 
+                    Actual_A_P__c,
+                    Actual_A_P_9L__c,
+                    Actual_Discount__c,
+                    Actual_Discount_9L__c,
+                    Actual_Free_Bottle_Qty__c,
+                    Actual_Net_Sales__c, 
+                    Approval_Status__c,
+                    Brand_Abbreviation__c,
+                    Brand_Code__c,
+                    Brand_Name__c, 
+                    Month_Name__c, 
+                    Plan_Qty__c, 
+                    Product_Name__c, 
+                    Product_Pack_Qty__c,
+                    Cost_of_Goods__c, 
+                    Gross_Profit__c, 
+                    Gross_Profit_9L__c,
+                    Brand_Profit__c, 
+                    Brand_Profit_9L__c,
+                    Gross_Selling_Price__c,
+                    Payment_Date__c,
+                    Payment_Type__c,
+                    Actual_Sales_Volume_9L__c,
+                    Period_Descriptor__c, 
+                    Vendor_Name__c,
+                    Year__c,
+                    Promotion_Material_A_P__r.A_P_Item_Brand_Code__c,
+                    Promotion_Material_A_P__r.A_P_Item_Brand_Name__c,
+                    Promotion_Material_A_P__r.A_P_Item_Product_Name__c,
+                    Promotion_Material_A_P__r.A_P_Item_Total__c,
+                    Promotion_Material_A_P__r.A_P_Item_Total_9L__c,
+                    Promotion_Material_A_P__r.A_P_Item_Unit_Cost__c,
+                    Promotion_Material_A_P__r.Budget_Type__c,
+                    Promotion_Material_A_P__r.Is_Incentive_Product__c,
+                    Promotion_Material_A_P__r.Item_Type__c,
+                    Promotion_Material_A_P__r.Quantity__c,
+                    Promotion_Material_Item__c, 
+                    Promotion_Material_Item__r.Name, 
+                    Promotion_Material_Item__r.Product_Name__c,
+                    Promotion_Material_Item__r.Product_Pack_Qty__c,
+                    Promotion_Material_Item__r.Product_Unit_Cost__c,
+                    Promotion_Material_Item__r.Product_Unit_Size__c,
+                    Promotion_Material_Item__r.Plan_Qty__c,
+                    Promotion_Material_Item__r.Total_Outlet_Incentive__c,
+                    Promotion_Material_Item__r.Total_Outlet_Incentive_9L__c,
+                    Promotion_Material_Item__r.Total_Product_A_P__c,
+                    Promotion_Material_Item__r.Total_Product_A_P_9L__c,
+                    Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods__c,
+                    Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods_9L__c,
+                    Promotion_Material_Item__r.Total_Product_A_P_Qty_Ex_FreeGoods__c,
+                    Promotion_Material_Item__r.Total_Planned_Discount__c,
+                    Promotion_Material_Item__r.Plan_Gross_Profit__c,
+                    Promotion_Material_Item__r.Plan_Gross_Profit_9L__c,
+                    Promotion_Material_Item__r.Plan_Net_Sales__c,
+                    Promotion_Material_Item__r.Plan_Gross_Profit_vs_Plan_Net_Sales__c,
+                    Promotion_Material_Item__r.Plan_Brand_Profit__c,
+                    Promotion_Material_Item__r.Plan_Brand_Profit_9L__c,
+                    Promotion_Material_Item__r.A_P_vs_Plan_Gross_Profit__c,
+                    Promotion_Material_Item__r.Promotion_Material_Item__r.Free_Bottle_COGS__c,
+                    Promotion_Material_Item__r.Free_Bottle_COGS_9L__c,
+                    Promotion_Material_Item__r.Free_Bottle_Cost__c,
+                    Promotion_Material_Item__r.Free_Bottle_Quantity__c, 
+                    Promotion_Material_Item__r.Free_Bottle_Quantity_9L__c,
+                    Promotion_Material_Item__r.Plan_COGS__c, 
+                    Promotion_Material_Item__r.Plan_Net_Sales__c, 
+                    Promotion_Material_Item__r.Plan_Qty_9L__c, 
+                    Promotion_Material_Item__r.Plan_Rebate__c, 
+                    Promotion_Material_Item__r.Product_Gross_Selling_Price__c,
+                    Promotion_Material_Item__r.Product_Selling_Price__c, 
+                    Promotion_Material_Item__r.Remaining_A_P__c,
+                    Promotion_Material_Item__r.Remaining_Discount__c,
+                    Promotion_Material_Item__r.Remaining_Free_Bottle_Qty__c,
+                    Promotion_Material_Item__r.Remaining_Market_A_P__c,
+                    Promotion_Material_Item__r.Remaining_Trade_A_P__c,
+                    Promotion_Material_Item__r.Remaining_Volume__c,
+                    Promotion_Material_Item__r.Target_Qty__c, 
+                    Promotion_Material_Item__r.Target_Qty_9L__c, 
+                    Promotion_Material_Item__r.Total_Product_A_P__c, 
+                    Promotion_Material_Item__r.Wholesaler_Discount__c,
+                    Promotion__r.Account_Region__c, 
+                    Promotion__r.AccountName__c, 
+                    Promotion__r.Area__c, 
+                    Promotion__r.City__c,
+                    Promotion__r.Group__c,
+                    Promotion__r.Outlet_Class__c,
+                    Promotion__r.SubGroup__c,
+                    Activity__c, 
+                    Activity__r.Name, 
+                    Activity__r.Begin_Date__c, 
+                    Activity__r.End_Date__c,
+                    Activity__r.Owner.Name,
+                    Activity__r.Payment_Type__c,
+                    Activity__r.Status__c,
+                    Activity__r.Wholesaler_Name__c,
+                    Activity__r.Channel__c,
+                    Activity__r.Brand_Manager_Name__c,
+                    Activity__r.Sales_Manager_Name__c,
+                    Activity__r.Marketing_Manager_Name__c,
+                    Activity__r.Finance_Manager_Name__c,
+                    Activity__r.Total_Volume__c,
+                    Activity__r.Total_Volume_9L__c,
+                    Activity__r.Total_Discount__c,
+                    Activity__r.Total_Discount_9L__c,
+                    Activity__r.Total_A_P__c,
+                    Activity__r.Total_A_P_9L__c,
+                    Activity__r.Total_MKT_A_P__c,
+                    Activity__r.Total_Trade_A_P__c,
+                    Activity__r.Total_Discount_A_P__c,
+                    Activity__r.Total_Discount_A_P_9L__c,
+                    Activity__r.Total_A_P_Discount_Ex_Freegoods__c,
+                    Activity__r.Total_A_P_Discount_Ex_Freegoods_9L__c,
+                    Activity__r.Total_Free_Bottle_Quantity__c,
+                    Activity__r.Total_Free_Bottle_Quantity_9L__c,
+                    Activity__r.Total_Free_Bottle_Cost,
+                    Activity__r.Total_Free_Bottle_COGS__c,
+                    Activity__r.Total_Free_Bottle_COGS_9L__c,
+                    Activity__r.Total_Net_Sales__c,
+                    Activity__r.Total_COGS__c,
+                    Activity__r.Total_Gross_Profit__c,
+                    Activity__r.Total_Gross_Profit_9L__c,
+                    Activity__r.Total_Gross_Profit_vs_Target_Net_Sales__c,
+                    Activity__r.Total_Discount_A_P_vs_GP__c,
+                    Activity__r.Total_Brand_Profit__c,
+                    Activity__r.Total_Brand_Profit_9L__c,
+                    Activity__r.Total_Remaining_A_P__c,
+                    Activity__r.Total_Remaining_MKT_A_P__c,
+                    Activity__r.Total_Remaining_Trade_A_P__c,
+                    Activity__r.Total_Remaining_Discount__c,
+                    Activity__r.Total_Remaining_Volume__c,
+                    Activity__r.Total_Remaining_Free_Bottle__c
+                    FROM %s
+                    WHERE RecordType.Name = %s
+                      AND Market_Name__c = %s 
+                    ORDER BY Activity__c, Promotion__c, Promotion_Material_Item__c",
+                    objectToQuery,
+                    recordTypeName,
+                    marketName)
+```

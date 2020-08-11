@@ -1,0 +1,754 @@
+---
+title: "Korea_SalesProposal_Data"
+author: "Tass Tsakiridis"
+date: "01/06/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(salesforcer)
+library(tidyverse)
+
+# Using OAuth 2.0 authentication
+salesforcer::sf_auth(token ="token.rds")
+
+# Name of core objects to query data from
+OBJECT_PROMOTION_ACTIVITY <- "Promotion_Activity__c"
+OBJECT_PROMOTION <- "Promotion__c"
+OBJECT_PROMOTION_MATERIAL_ITEM <- "Promotion_Material_Item__c"
+OBJECT_PROMOTION_MATERIAL_AP <- "Promotion_Material_A_P__c"
+OBJECT_PMI_ACTUAL <- "PMI_Actual__c"
+
+# Name of market
+MARKET_NAME <- "Korea"
+
+# Name of Sales Proposal RecordType
+RECORDTYPE_NAME <- "Sales Proposal"
+
+# Korea Users and Teams
+teams_df <- data.frame(stringsAsFactors = FALSE,
+                       Owner = c("YongDeuk Jeon","Seung-pyo Hong","Jin-Hwan Park","Ki-Chang Choi","Jongdae JEON","Jong-Hee Kang",
+                                 "Hyun-Joon Jung","Dohoon Ko","Jin-Moon Ko","Seok Won Kim","Jun-seong Kim","Kang Changu",
+                                 "Heon-Chan Kim","MinHo Park","Jun-young Ko","Han Jun-Sung","Hyeon-Seop Song","Seong-il Jo",
+                                 "JunHyoung Lee","Chang-hwa Jeong","Byung-Kyu Kim","Changu Kang","Dong-Yeon Seo","Young-Jo Choi",
+                                 "Seung-Heon Oh","Hyoman Koo","JiWon Sea","Si-Nae Shin","Jung-Hoon Kim","Min Jung Kim","Rob Capito",
+                                 "Will Hua","MinJi Kang","Sunghwa Lee"),
+                       Team = c("SL1","SL1","SL1","SL1","SL1","SL1","SL1","SL1","SL2","SL2","SL2","SL3","SL3","SL3","SL3","SL3","SL3",
+                                "SL4","SL4","SL4","SL4","SL4","SL4","SL4","SL4","SL4","SL4","SL4","SL4","SL4","Admin","Admin",
+                                "Finance","Finance"))
+getOwnerTeam <- teams_df$Team
+names(getOwnerTeam) <- teams_df$Owner
+teams <- list("YongDeuk Jeon"=c("SL1"), 
+              "Seung-pyo Hong"=c("SL1"),
+              "Jin-Hwan Park"=c("SL1"),
+              "Ki-Chang Choi"=c("SL1"),
+              "Jongdae JEON"=c("SL1"),
+              "Jong-Hee Kang"=c("SL1"),
+              "Hyun-Joon Jung"=c("SL1"),
+              "Dohoon Ko"=c("SL1"),
+              "Jin-Moon Ko"=c("SL2"),
+              "Seok Won Kim"=c("SL2"),
+              "Jun-seong Kim"=c("SL2"),
+              "Kang Changu"=c("SL3"),
+              "Heon-Chan Kim"=c("SL3"),
+              "MinHo Park"=c("SL3"),
+              "Jun-young Ko"=c("SL3"),
+              "Han Jun-Sung"=c("SL3"),
+              "Hyeon-Seop Song"=c("SL3"),
+              "Seong-il Jo"=c("SL4"),
+              "JunHyoung Lee"=c("SL4"),
+              "Chang-hwa Jeong"=c("SL4"),
+              "Byung-Kyu Kim"=c("SL4"),
+              "Changu Kang"=c("SL4"),
+              "Dong-Yeon Seo"=c("SL4"),
+              "Young-Jo Choi"=c("SL4"),
+              "Seung-Heon Oh"=c("SL4"),
+              "Hyoman Koo"=c("SL4"),
+              "JiWon Sea"=c("SL4"),
+              "Si-Nae Shin"=c("SL4"),
+              "Jung-Hoon Kim"=c("SL4"),
+              "Min Jung Kim"=c("SL4"),
+              "Rob Capito"=c("Admin"),
+              "Will Hua"=c("Admin"),
+              "MinJi Kang"=c("Finance"),
+              "Sunghwa Lee"=c("Finance"))
+
+# Financial Year Month descriptors
+fyMonths <- list("May"=c("01 May"),
+                 "June"=c("02 June"),
+                 "July"=c("03 July"),
+                 "August"=c("04 August"),
+                 "September"=c("05 September"),
+                 "October"=c("06 October"),
+                 "November"=c("07 November"),
+                 "December"=c("08 December"),
+                 "January"=c("09 January"),
+                 "February"=c("10 February"),
+                 "March"=c("11 March"),
+                 "April"=c("12 April"))
+
+
+
+# Local fields from the PMI_Actual__c object
+# Id                  [String]
+# Name                [String]
+# Act_Qty__c          [Number]
+# Activity__c         [String]
+# Actual_Net_Sales__c [Currency]
+# Brand_Name__c       [String]
+# Month_Name__c       [String]
+# Plan_Qty__c         [Number]
+# Product_Name__c     [String]
+# Product_Pack_Qty__c [Number]
+
+# Fields from the Promotion_Material_Item__c object - the Product details
+# Free_Bottle_COGS__c               [Currency]
+# Free_Bottle_Quantity__c           [Number]
+# Plan_COGS__c                      [Currency]
+# Plan_Net_Sales__c                 [Currency]
+# Plan_Qty_9L__c                    [Number]
+# Plan_Rebate__c                    [Currency]
+# Product_Gross_Selling_Price__c    [Currency]
+# Product_Selling_Price__c          [Currency]
+# Target_Qty__c                     [Number]
+# Target_Qty_9L__c                  [Number]
+# Total_Product_A_P__c              [Currency]
+# Wholesaler_Discount__c            [Percent]
+
+# Fields from the Promotion__c object - the Account details
+# Account_Region__c   [String]
+# AccountName__c      [String]
+# Area__c             [String]
+# City__c             [String]
+# Group__c            [String]
+# Outlet_Class__c     [String]
+# SubGroup__c         [String]
+
+# SOQL Query
+# Fields from the Promotion_Activity__c object
+# Name                [String]
+# Owner.Name          [String]
+
+soql_PromotionMaterialItem <- "SELECT Id, Name, 
+                                      Activity__c,
+                                      Activity__r.Owner.Name,
+                                      Activity__r.Begin_Date__c,
+                                      Activity__r.End_Date__c,
+                                      Promotion__c,
+                                      Promotion__r.Account__c,
+                                      Promotion__r.AccountName__c,
+                                      Promotion__r.Account_Region__c,
+                                      Promotion__r.Area__c,
+                                      Promotion__r.City__c,
+                                      Promotion__r.Group__c,
+                                      Promotion__r.Outlet_Class__c,
+                                      Promotion__r.SubGroup__c,
+                                      Brand__c,
+                                      Brand_Code__c,
+                                      Product_Custom__c,
+                                      Product_Name__c,
+                                      Product_Pack_Qty__c,
+                                      Product_Selling_Price__c,
+                                      Product_Unit_Cost__c,
+                                      Product_Unit_Size__c,
+                                      Product_Gross_Selling_Price__c,
+                                      Wholesaler_Discount__c,
+                                      Plan_Rebate__c,
+                                      Plan_Qty__c,
+                                      Plan_Qty_9L__c,
+                                      Target_Qty__c,
+                                      Target_Qty_9L__c,
+                                      Total_Outlet_Incentive__c,
+                                      Total_Outlet_Incentive_9L__c,
+                                      Total_Product_A_P__c,
+                                      Total_Product_A_P_9L__c,
+                                      Total_Product_A_P_Excluding_FreeGoods__c,
+                                      Total_Product_A_P_Excluding_FreeGoods_9L__c,
+                                      Total_Product_A_P_Qty_Ex_FreeGoods__c,
+                                      Total_Plan_Discount__c,
+                                      COGS__c,
+                                      Plan_COGS__c,
+                                      Plan_Gross_Profit__c,
+                                      Plan_Gross_Profit_9L__c,
+                                      Plan_Net_Sales__c,
+                                      Plan_Gross_Profit_vs_Plan_Net_Sales__c,
+                                      Plan_Brand_Profit__c,
+                                      Plan_Brand_Profit_9L__c,
+                                      A_P_vs_Plan_Gross_Profit__c,
+                                      Free_Bottle_COGS__c,
+                                      Free_Bottle_COGS_9L__c,
+                                      Free_Bottle_Cost__c,
+                                      Free_Bottle_Quantity__c,
+                                      Free_Bottle_Quantity_9L__c,
+                                      Remaining_A_P__c,
+                                      Remaining_Discount__c,
+                                      Remaining_Free_Bottle_Qty__c,
+                                      Remaining_Market_A_P__c,
+                                      Remaining_Trade_A_P__c,
+                                      Remaining_Volume__c
+                                      FROM Promotion_Material_Item__c
+                                      WHERE RecordType.Name = 'Sales Proposal'
+                                        AND Activity__r.Market__r.Name = 'Korea'
+                                        AND Activity__r.Status__c = 'Approved'"
+
+df.pmi <- sf_query_bulk(soql_PromotionMaterialItem, object_name = OBJECT_PROMOTION_MATERIAL_ITEM, guess_types = FALSE, verbose = F)
+
+soql_PMIActual <- "SELECT Id, Name,
+                          Activity__c,
+                          Promotion__c,
+                          Promotion_Material_Item__c,
+                          A_P_Item__c,
+                          A_P_Item_Product__c,
+                          A_P_Item_Product_Name__c,
+                          A_P_Item_Brand_Code__c,
+                          A_P_Item_Brand_Name__c,
+                          Act_Qty__c,
+                          Actual_A_P__c,
+                          Actual_A_P_9L__c,
+                          Actual_Discount__c,
+                          Actual_Discount_9L__c,
+                          Actual_Free_Bottle_Qty__c,
+                          Actual_Net_Sales__c,
+                          Actual_Sales_Volume_9L__c,
+                          Approval_Status__c,
+                          Brand_Abbreviation__c,
+                          Brand_Code__c,
+                          Brand_Name__c,
+                          Brand_Profit__c,
+                          Brand_Profit_9L__c,
+                          Cost_of_Goods__c,
+                          Gross_Profit__c,
+                          Gross_Profit_9L__c,
+                          Product_Name__c,
+                          Product_Pack_Qty__c,
+                          Product_Unit_Size__c,
+                          Month_Name__c,
+                          Payment_Date__c,
+                          Payment_Type__c,
+                          Period_Descriptor__c,
+                          Vendor_Name__c,
+                          Year__c,
+                          Activity__r.Name,
+                          Activity__r.Begin_Date__c, 
+                          Activity__r.End_Date__c,
+                          Activity__r.Owner.Name,
+                          Activity__r.Payment_Type__c,
+                          Activity__r.Status__c,
+                          Activity__r.Wholesaler_Name__c,
+                          Activity__r.Channel__c,
+                          Activity__r.Brand_Manager_Name__c,
+                          Activity__r.Sales_Manager_Name__c,
+                          Activity__r.Marketing_Manager_Name__c,
+                          Activity__r.Finance_Manager_Name__c,
+                          Activity__r.Total_Volume__c,
+                          Activity__r.Total_Volume_9L__c,
+                          Activity__r.Total_Discount__c,
+                          Activity__r.Total_Discount_9L__c,
+                          Activity__r.Total_A_P_Discount__c,
+                          Activity__r.Total_A_P_Discount_9L__c,
+                          Activity__r.Total_Actual_Market_A_P__c,
+                          Activity__r.Total_Actual_Trade_A_P__c,
+                          Activity__r.Total_Market_A_P__c,
+                          Activity__r.Total_Trade_A_P__c,
+                          Activity__r.Total_Discount_A_P__c,
+                          Activity__r.Total_Discount_A_P_9L__c,
+                          Activity__r.Total_A_P_Discount_Ex_Freegoods__c,
+                          Activity__r.Total_A_P_Discount_Ex_Freegoods_9L__c,
+                          Activity__r.Total_Free_Bottle_Quantity__c,
+                          Activity__r.Total_Free_Bottle_Quantity_9L__c,
+                          Activity__r.Total_Free_Bottle_Cost__c,
+                          Activity__r.Total_Free_Bottle_COGS__c,
+                          Activity__r.Total_Free_Bottle_COGS_9L__c,
+                          Activity__r.Total_Net_Sales__c,
+                          Activity__r.Total_Cost_of_Goods__c,
+                          Activity__r.Total_Gross_Profit__c,
+                          Activity__r.Total_Gross_Profit_9L__c,
+                          Activity__r.Total_Gross_Profit_vs_Total_Net_Sales__c,
+                          Activity__r.Total_Discount_A_P_vs_GP__c,
+                          Activity__r.Total_Brand_Profit__c,
+                          Activity__r.Total_Brand_Profit_9L__c,
+                          Activity__r.Total_Remaining_A_P__c,
+                          Activity__r.Total_Remaining_Market_A_P__c,
+                          Activity__r.Total_Remaining_Trade_A_P__c,
+                          Activity__r.Total_Remaining_Discount__c,
+                          Activity__r.Total_Remaining_Volume__c,
+                          Activity__r.Total_Remaining_Free_Bottle__c,
+                          Promotion__r.Account__c,
+                          Promotion__r.AccountName__c,
+                          Promotion__r.Account_Region__c,
+                          Promotion__r.Area__c,
+                          Promotion__r.City__c,
+                          Promotion__r.Group__c,
+                          Promotion__r.Outlet_Class__c,
+                          Promotion__r.SubGroup__c,
+                          Promotion_Material_Item__r.Product_Custom__c,
+                          Promotion_Material_Item__r.Product_Name__c,
+                          Promotion_Material_Item__r.Product_Pack_Qty__c,
+                          Promotion_Material_Item__r.Product_Selling_Price__c,
+                          Promotion_Material_Item__r.Product_Unit_Cost__c,
+                          Promotion_Material_Item__r.Product_Unit_Size__c,
+                          Promotion_Material_Item__r.Product_Gross_Selling_Price__c,
+                          Promotion_Material_Item__r.Wholesaler_Discount__c,
+                          Promotion_Material_Item__r.Plan_Rebate__c,
+                          Promotion_Material_Item__r.Plan_Qty__c,
+                          Promotion_Material_Item__r.Plan_Qty_9L__c,
+                          Promotion_Material_Item__r.Target_Qty__c,
+                          Promotion_Material_Item__r.Target_Qty_9L__c,
+                          Promotion_Material_Item__r.Total_Actual_Volume__c,
+                          Promotion_Material_Item__r.Total_Outlet_Incentive__c,
+                          Promotion_Material_Item__r.Total_Outlet_Incentive_9L__c,
+                          Promotion_Material_Item__r.Total_Product_A_P__c,
+                          Promotion_Material_Item__r.Total_Product_A_P_9L__c,
+                          Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods__c,
+                          Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods_9L__c,
+                          Promotion_Material_Item__r.Total_Product_A_P_Qty_Ex_FreeGoods__c,
+                          Promotion_Material_Item__r.Total_Plan_Discount__c,
+                          Promotion_Material_Item__r.COGS__c,
+                          Promotion_Material_Item__r.Plan_COGS__c,
+                          Promotion_Material_Item__r.Plan_Gross_Profit__c,
+                          Promotion_Material_Item__r.Plan_Gross_Profit_9L__c,
+                          Promotion_Material_Item__r.Plan_Net_Sales__c,
+                          Promotion_Material_Item__r.Plan_Gross_Profit_vs_Plan_Net_Sales__c,
+                          Promotion_Material_Item__r.Plan_Brand_Profit__c,
+                          Promotion_Material_Item__r.Plan_Brand_Profit_9L__c,
+                          Promotion_Material_Item__r.A_P_vs_Plan_Gross_Profit__c,
+                          Promotion_Material_Item__r.Free_Bottle_COGS__c,
+                          Promotion_Material_Item__r.Free_Bottle_COGS_9L__c,
+                          Promotion_Material_Item__r.Free_Bottle_Cost__c,
+                          Promotion_Material_Item__r.Free_Bottle_Quantity__c,
+                          Promotion_Material_Item__r.Free_Bottle_Quantity_9L__c,
+                          Promotion_Material_Item__r.Remaining_A_P__c,
+                          Promotion_Material_Item__r.Remaining_Discount__c,
+                          Promotion_Material_Item__r.Remaining_Free_Bottle_Qty__c,
+                          Promotion_Material_Item__r.Remaining_Market_A_P__c,
+                          Promotion_Material_Item__r.Remaining_Trade_A_P__c,
+                          Promotion_Material_Item__r.Remaining_Volume__c
+                          FROM PMI_Actual__c
+                          WHERE RecordType.Name = 'Sales Proposal'
+                            AND Activity__r.Market__r.Name = 'Korea'
+                            AND Activity__r.Status__c = 'Approved'"
+
+df.actuals <- sf_query_bulk(soql_PMIActual, object_name = OBJECT_PMI_ACTUAL, guess_types = FALSE, verbose = F)
+
+  unique(df.actuals$Activity__r.Owner.Name) -> df.owners
+
+df.actuals %>%
+  group_by(Activity__c, Promotion_Material_Item__c) %>%
+  summarise(act_qty = sum(as.numeric(Act_Qty__c), na.rm=TRUE)) %>%
+  select(Activity__c= Activity__c,
+         Id =Promotion_Material_Item__c,
+         Total_Actual_Volume=act_qty) -> df.groupedActualsVolume
+
+df.pmi %>%
+  left_join(df.groupedActualsVolume, by = c('Activity__c','Id')) -> df.pmi
+
+df.actuals %>%
+  group_by(Activity__c, Promotion_Material_Item__c) %>%
+  summarise(ap_qty = sum(as.numeric(Actual_A_P__c), na.rm=TRUE)) %>%
+  select(Activity__c=Activity__c,
+         Id=Promotion_Material_Item__c,
+         Total_Actual_A_P=ap_qty) -> df.groupedActualsAP
+
+df.pmi %>%
+  left_join(df.groupedActualsAP, by = c('Activity__c','Id')) -> df.pmi
+
+df.pmi %>%
+  mutate(Team = unname(getOwnerTeam[Activity__r.Owner.Name])) %>%
+  mutate(Activity__r.Begin_Date__c = as.Date(Activity__r.Begin_Date__c)) %>%
+  mutate(Activity__r.End_Date__c = as.Date(Activity__r.End_Date__c)) %>%
+  mutate(Product_Gross_Selling_Price__c = as.numeric(Product_Gross_Selling_Price__c)) %>%
+  mutate(Product_Selling_Price__c = as.numeric(Product_Selling_Price__c)) %>%
+  mutate(Product_Pack_Qty__c = as.numeric(Product_Pack_Qty__c)) %>%
+  mutate(Product_Unit_Cost__c = as.numeric(Product_Unit_Cost__c)) %>%
+  mutate(Product_Unit_Size__c = as.numeric(Product_Unit_Size__c)) %>%
+  mutate(Wholesaler_Discount__c = as.numeric(Wholesaler_Discount__c) / 100) %>%
+  mutate(Plan_Rebate__c = as.numeric(Plan_Rebate__c)) %>%
+  mutate(Plan_Qty__c = as.numeric(Plan_Qty__c)) %>%
+  mutate(Plan_Qty_9L__c = as.numeric(Plan_Qty_9L__c)) %>%
+  mutate(Target_Qty__c = as.numeric(Target_Qty__c)) %>%
+  mutate(Target_Qty_9L__c = as.numeric(Target_Qty_9L__c)) %>%
+  mutate(Total_Outlet_Incentive__c = as.numeric(Total_Outlet_Incentive__c)) %>%
+  mutate(Total_Outlet_Incentive_9L__c = as.numeric(Total_Outlet_Incentive_9L__c)) %>%
+  mutate(Total_Product_A_P__c = as.numeric(Total_Product_A_P__c)) %>%
+  mutate(Total_Product_A_P_9L__c = as.numeric(Total_Product_A_P_9L__c)) %>%
+  mutate(Total_Product_A_P_Excluding_FreeGoods__c = as.numeric(Total_Product_A_P_Excluding_FreeGoods__c)) %>%
+  mutate(Total_Product_A_P_Excluding_FreeGoods_9L__c = as.numeric(Total_Product_A_P_Excluding_FreeGoods_9L__c)) %>%
+  mutate(Total_Product_A_P_Qty_Ex_FreeGoods__c = as.numeric(Total_Product_A_P_Qty_Ex_FreeGoods__c)) %>%
+  mutate(Total_Plan_Discount__c = as.numeric(Total_Plan_Discount__c)) %>%
+  mutate(COGS__c = as.numeric(COGS__c)) %>%
+  mutate(Plan_COGS__c = as.numeric(Plan_COGS__c)) %>%
+  mutate(Plan_Gross_Profit__c = as.numeric(Plan_Gross_Profit__c)) %>%
+  mutate(Plan_Gross_Profit_9L__c = as.numeric(Plan_Gross_Profit_9L__c)) %>%
+  mutate(Plan_Net_Sales__c = as.numeric(Plan_Net_Sales__c)) %>%
+  mutate(Plan_Gross_Profit_vs_Plan_Net_Sales__c = as.numeric(Plan_Gross_Profit_vs_Plan_Net_Sales__c)) %>%
+  mutate(Plan_Brand_Profit__c = as.numeric(Plan_Brand_Profit__c)) %>%
+  mutate(Plan_Brand_Profit_9L__c = as.numeric(Plan_Brand_Profit_9L__c)) %>%
+  mutate(A_P_vs_Plan_Gross_Profit__c = as.numeric(A_P_vs_Plan_Gross_Profit__c)) %>%
+  mutate(Free_Bottle_COGS__c = as.numeric(Free_Bottle_COGS__c)) %>%
+  mutate(Free_Bottle_COGS_9L__c = as.numeric(Free_Bottle_COGS_9L__c)) %>%
+  mutate(Free_Bottle_Cost__c = as.numeric(Free_Bottle_Cost__c)) %>%
+  mutate(Free_Bottle_Quantity__c = as.numeric(Free_Bottle_Quantity__c)) %>%
+  mutate(Free_Bottle_Quantity_9L__c = as.numeric(Free_Bottle_Quantity_9L__c)) %>%
+  mutate(Remaining_A_P__c = as.numeric(Remaining_A_P__c)) %>%
+  mutate(Remaining_Discount__c = as.numeric(Remaining_Discount__c)) %>%
+  mutate(Remaining_Free_Bottle_Qty__c = as.numeric(Remaining_Free_Bottle_Qty__c)) %>%
+  mutate(Remaining_Market_A_P__c = as.numeric(Remaining_Market_A_P__c)) %>%
+  mutate(Remaining_Trade_A_P__c = as.numeric(Remaining_Trade_A_P__c)) %>%
+  mutate(Remaining_Volume__c = as.numeric(Remaining_Volume__c)) %>%
+  mutate(Price = case_when(is.na(Product_Gross_Selling_Price__c) ~ Product_Selling_Price__c,
+                           is.null(Product_Gross_Selling_Price__c) ~ Product_Selling_Price__c,
+                           Product_Gross_Selling_Price__c == 0 ~ Product_Selling_Price__c,
+                           TRUE ~ Product_Gross_Selling_Price__c)) %>%
+  mutate(Gross_Sales = as.numeric(Target_Qty__c) * as.numeric(Product_Pack_Qty__c) * Price) %>%
+  mutate(Wholesaler_Discount_Amount = as.numeric(Gross_Sales) * as.numeric(Wholesaler_Discount__c)) %>%
+  mutate(Outlet_Discount_Amount = as.numeric(Plan_Qty__c) * as.numeric(Plan_Rebate__c)) %>%
+  mutate(Net_Sales = Gross_Sales - Wholesaler_Discount_Amount - Outlet_Discount_Amount) %>%
+  mutate(Gross_Profit = Net_Sales - as.numeric(Plan_COGS__c)) %>%
+  mutate(Brand_Profit = Gross_Profit - as.numeric(Total_Product_A_P__c)) %>%
+  mutate(Discount_AP_vs_GP = (as.numeric(Total_Outlet_Incentive__c) + as.numeric(Total_Product_A_P__c)) / (as.numeric(Total_Outlet_Incentive__c) + Gross_Profit)) %>%
+  mutate(Wholesaler_and_Outlet_Discount_AP_vs_GP = (Wholesaler_Discount_Amount + as.numeric(Total_Outlet_Incentive__c) + as.numeric(Total_Product_A_P__c)) / (as.numeric(Total_Outlet_Incentive__c) + Gross_Profit)) %>%
+  mutate(Actual_Gross_Sales = Total_Actual_Volume * as.numeric(Product_Pack_Qty__c) * Price) %>%
+  mutate(Actual_Wholesaler_Discount = Actual_Gross_Sales * as.numeric(Wholesaler_Discount__c)) %>%
+  mutate(Actual_Outlet_Discount = Total_Actual_Volume * as.numeric(Plan_Rebate__c)) %>%
+  mutate(Actual_Net_Sales = as.numeric(Actual_Gross_Sales - Actual_Wholesaler_Discount - Actual_Outlet_Discount)) %>%
+  mutate(Actual_Gross_Profit = as.numeric(Actual_Net_Sales) - as.numeric(COGS__c)) %>%
+  mutate(Actual_Brand_Profit = as.numeric(Actual_Gross_Profit) - as.numeric(Total_Actual_A_P)) %>%
+  mutate(Actual_Discount_AP_vs_GP = (Actual_Outlet_Discount + as.numeric(Total_Actual_A_P)) / (Actual_Outlet_Discount + Actual_Gross_Profit)) %>%
+  mutate(Actual_Wholesaler_Discount_AP_vs_GP = (Actual_Wholesaler_Discount + Actual_Outlet_Discount + Total_Actual_A_P) / (Actual_Outlet_Discount + Actual_Gross_Profit)) %>%
+  mutate(Actual_Sales_Volume = Total_Actual_Volume * as.numeric(Product_Pack_Qty__c) * as.numeric(Product_Unit_Size__c)) %>%
+  mutate(Actual_Sales_Volume_9L = Actual_Sales_Volume / 9000) %>%
+  select(Id = Id,
+         Name = Name,
+         "Owner" = Activity__r.Owner.Name,
+         "Sales Proposal" = Activity__c,
+         "Team" = Team,
+         "Begin Date" = Activity__r.Begin_Date__c,
+         "End Date" = Activity__r.End_Date__c,
+         "Promotion" = Promotion__c,
+         "Account ID" = Promotion__r.Account__c,
+         "Account Name" = Promotion__r.AccountName__c,
+         "Account Region" = Promotion__r.Account_Region__c,
+         "Account Area" = Promotion__r.Area__c,
+         "Account City" = Promotion__r.City__c,
+         "Account Group" = Promotion__r.Group__c,
+         "Account Outlet Class" = Promotion__r.Outlet_Class__c,
+         "Account SubGroup" = Promotion__r.SubGroup__c,
+         "Brand" = Brand__c,
+         "Brand Code" = Brand_Code__c,
+         "Product Name" = Product_Name__c,
+         "Product Pack Qty" = Product_Pack_Qty__c,
+         "Product Selling Price" = Product_Selling_Price__c,
+         "Product Gross Selling Price" = Product_Gross_Selling_Price__c,
+         "Price" = Price,
+         "Product Unit Cost" = Product_Unit_Cost__c,
+         "Product Unit Size" = Product_Unit_Size__c,
+         "Wholesaler Discount %" = Wholesaler_Discount__c,
+         "Free Bottle Quantity" = Free_Bottle_Quantity__c,
+         "Plan Discount" = Plan_Rebate__c,
+         "Plan Qty" = Plan_Qty__c,
+         "Plan Qty (9L)" = Plan_Qty_9L__c,
+         "Target Qty" = Target_Qty__c,
+         "Target Qty (9L)" = Target_Qty_9L__c,
+         "Total Outlet Incentive" = Total_Outlet_Incentive__c,
+         "Total Outlet Incentive (9L)" = Total_Outlet_Incentive_9L__c,
+         "Total Product A&P" = Total_Product_A_P__c,
+         "Total Product A&P (9L)" = Total_Product_A_P_9L__c,
+         "Total Product A&P (ex FreeGoods)" = Total_Product_A_P_Excluding_FreeGoods__c,
+         "Total Product A&P (ex FreeGoods) (9L)" = Total_Product_A_P_Excluding_FreeGoods_9L__c,
+         "Total Product A&P Qty (ex FreeGoods)" = Total_Product_A_P_Qty_Ex_FreeGoods__c,
+         "Total Plan Discount" = Total_Plan_Discount__c,
+         "Plan COGS" = Plan_COGS__c,
+         "Plan Gross Profit" = Plan_Gross_Profit__c,
+         "Plan Gross Profit (9L)" = Plan_Gross_Profit_9L__c,
+         "Plan Net Sales" = Plan_Net_Sales__c,
+         "Plan Gross Profit vs Plan Net Sales" = Plan_Gross_Profit_vs_Plan_Net_Sales__c,
+         "Plan Brand Profit" = Plan_Brand_Profit__c,
+         "Plan Brand Profit (9L)" = Plan_Brand_Profit_9L__c,
+         "A&P vs Plan Gross Profit" = A_P_vs_Plan_Gross_Profit__c,
+         "Free Bottle COGS" = Free_Bottle_COGS__c,
+         "Free Bottle COGS (9L)" = Free_Bottle_COGS_9L__c,
+         "Free Bottle Cost" = Free_Bottle_Cost__c,
+         "Free Bottle Quantity" = Free_Bottle_Quantity__c,
+         "Free Bottle Quantity (9L)" = Free_Bottle_Quantity_9L__c,
+         "Remaining A&P" = Remaining_A_P__c,
+         "Remaining Discount" = Remaining_Discount__c,
+         "Remaining Free Bottle Qty" = Remaining_Free_Bottle_Qty__c,
+         "Remaining MKT A&P" = Remaining_Market_A_P__c,
+         "Remaining Trade A&P" = Remaining_Trade_A_P__c,
+         "Remaining Volume" = Remaining_Volume__c,
+         "Gross Sales" = Gross_Sales,
+         "Wholesaler Discount ($)" = Wholesaler_Discount_Amount,
+         "Outlet Discount ($)" = Outlet_Discount_Amount,
+         "Net Sales" = Net_Sales,
+         "Gross Profit" = Gross_Profit,
+         "Brand Profit" = Brand_Profit,
+         "Discount & A&P vs GP" = Discount_AP_vs_GP,
+         "Wholesaler & Outlet Discount & A&P vs GP" = Wholesaler_and_Outlet_Discount_AP_vs_GP,
+         "Total Actual Volume" = Total_Actual_Volume,
+         "Actual Sales Volume" = Actual_Sales_Volume,
+         "Actual Sales Volume (9L)" = Actual_Sales_Volume_9L,
+         "Actual Gross Sales" = Actual_Gross_Sales,
+         "Actual Wholesaler Discount ($)" = Actual_Wholesaler_Discount,
+         "Actual Outlet Discount ($)" = Actual_Outlet_Discount,
+         "Actual Net Sales" = Actual_Net_Sales,
+         "Actual Gross Profit" = Actual_Gross_Profit,
+         "Total Actual A&P" = Total_Actual_A_P,
+         "Actual Brand Profit" = Actual_Brand_Profit,
+         "Actual Discount & A&P vs GP" = Actual_Discount_AP_vs_GP,
+         "Actual Wholesaler & Discount & A&P vs GP" = Actual_Wholesaler_Discount_AP_vs_GP) -> df.pmi_output
+    
+df.actuals %>%
+  mutate(Team = unname(getOwnerTeam[Activity__r.Owner.Name])) %>%
+  mutate(Act_Qty__c = case_when(is.na(Act_Qty__c) ~ 0,
+                                is.null(Act_Qty__c) ~ 0,
+                                TRUE ~ as.numeric(Act_Qty__c))) %>%
+  mutate(Actual_A_P__c = as.numeric(Actual_A_P__c)) %>%
+  mutate(Actual_A_P_9L__c = as.numeric(Actual_A_P_9L__c)) %>%
+  mutate(Actual_Discount__c = as.numeric(Actual_Discount__c)) %>%
+  mutate(Actual_A_P_9L__c = as.numeric(Actual_Discount_9L__c)) %>%
+  mutate(Actual_Free_Bottle_Qty__c = as.numeric(Actual_Free_Bottle_Qty__c)) %>%
+  mutate(Actual_Net_Sales__c = as.numeric(Actual_Net_Sales__c)) %>%
+  mutate(Brand_Profit__c = as.numeric(Brand_Profit__c)) %>%
+  mutate(Brand_Profit_9L__c = as.numeric(Brand_Profit_9L__c)) %>%
+  mutate(Cost_of_Goods__c = case_when(is.na(Cost_of_Goods__c) ~ 0,
+                                      is.null(Cost_of_Goods__c) ~ 0,
+                                      TRUE ~ as.numeric(Cost_of_Goods__c))) %>%
+  mutate(Product_Pack_Qty__c = case_when(is.na(Product_Pack_Qty__c) ~ 0,
+                                         is.null(Product_Pack_Qty__c) ~ 0,
+                                         TRUE ~ as.numeric(Product_Pack_Qty__c))) %>%
+  mutate(Promotion_Material_Item__r.Product_Gross_Selling_Price__c = as.numeric(Promotion_Material_Item__r.Product_Gross_Selling_Price__c)) %>%
+  mutate(Promotion_Material_Item__r.Product_Selling_Price__c = as.numeric(Promotion_Material_Item__r.Product_Selling_Price__c)) %>%
+  mutate(Payment_Date__c = as.Date(Payment_Date__c)) %>%
+  mutate(Activity__r.Begin_Date__c = as.Date(Activity__r.Begin_Date__c)) %>%
+  mutate(Activity__r.End_Date__c = as.Date(Activity__r.End_Date__c)) %>%
+  mutate(Activity__r.Total_Volume__c = as.numeric(Activity__r.Total_Volume__c)) %>%
+  mutate(Activity__r.Total_Volume_9L__c = as.numeric(Activity__r.Total_Volume_9L__c)) %>%
+  mutate(Activity__r.Total_Discount__c = as.numeric(Activity__r.Total_Discount__c)) %>%
+  mutate(Activity__r.Total_A_P_Discount__c = as.numeric(Activity__r.Total_A_P_Discount__c)) %>%
+  mutate(Activity__r.Total_A_P_Discount_9L__c = as.numeric(Activity__r.Total_A_P_Discount_9L__c)) %>%
+  mutate(Activity__r.Total_Actual_Market_A_P__c = as.numeric(Activity__r.Total_Actual_Market_A_P__c)) %>%
+  mutate(Activity__r.Total_Actual_Trade_A_P__c = as.numeric(Activity__r.Total_Actual_Trade_A_P__c)) %>%
+  mutate(Activity__r.Total_Market_A_P__c = as.numeric(Activity__r.Total_Market_A_P__c)) %>%
+  mutate(Activity__r.Total_Trade_A_P__c = as.numeric(Activity__r.Total_Trade_A_P__c)) %>%
+  mutate(Activity__r.Total_Discount_A_P__c = as.numeric(Activity__r.Total_Discount_A_P__c)) %>%
+  mutate(Activity__r.Total_Discount_A_P_9L__c = as.numeric(Activity__r.Total_Discount_A_P_9L__c)) %>%
+  mutate(Activity__r.Total_A_P_Discount_Ex_FreeGoods__c = as.numeric(Activity__r.Total_A_P_Discount_Ex_FreeGoods__c)) %>%
+  mutate(Activity__r.Total_A_P_Discount_Ex_FreeGoods_9L__c = as.numeric(Activity__r.Total_A_P_Discount_Ex_FreeGoods_9L__c)) %>%
+  mutate(Activity__r.Total_Free_Bottle_Quantity__c = as.numeric(Activity__r.Total_Free_Bottle_Quantity__c)) %>%
+  mutate(Activity__r.Total_Free_Bottle_Quantity_9L__c = as.numeric(Activity__r.Total_Free_Bottle_Quantity_9L__c)) %>%
+  mutate(Activity__r.Total_Free_Bottle_Cost__c = as.numeric(Activity__r.Total_Free_Bottle_Cost__c)) %>%
+  mutate(Activity__r.Total_Free_Bottle_COGS__c = as.numeric(Activity__r.Total_Free_Bottle_COGS__c)) %>%
+  mutate(Activity__r.Total_Free_Bottle_COGS_9L__c = as.numeric(Activity__r.Total_Free_Bottle_COGS_9L__c)) %>%
+  mutate(Activity__r.Total_Net_Sales__c = as.numeric(Activity__r.Total_Free_Bottle_COGS_9L__c)) %>%
+  mutate(Activity__r.Total_Cost_of_Goods__c = as.numeric(Activity__r.Total_Cost_of_Goods__c)) %>%
+  mutate(Activity__r.Total_Gross_Profit__c = as.numeric(Activity__r.Total_Gross_Profit__c)) %>%
+  mutate(Activity__r.Total_Gross_Profit_9L__c = as.numeric(Activity__r.Total_Gross_Profit_9L__c)) %>%
+  mutate(Activity__r.Total_Gross_Profit_vs_Total_Net_Sales__c = as.numeric(Activity__r.Total_Gross_Profit_vs_Total_Net_Sales__c)) %>%
+  mutate(Activity__r.Total_Discount_A_P_vs_GP__c = as.numeric(Activity__r.Total_Discount_A_P_vs_GP__c)) %>%
+  mutate(Activity__r.Total_Brand_Profit__c = as.numeric(Activity__r.Total_Brand_Profit__c)) %>%
+  mutate(Activity__r.Total_Brand_Profit_9L__c = as.numeric(Activity__r.Total_Brand_Profit_9L__c)) %>%
+  mutate(Activity__r.Total_Remaining_A_P__c = as.numeric(Activity__r.Total_Remaining_A_P__c)) %>%
+  mutate(Activity__r.Total_Remaining_Market_A_P__c = as.numeric(Activity__r.Total_Remaining_Market_A_P__c)) %>%
+  mutate(Activity__r.Total_Remaining_Trade_A_P__c = as.numeric(Activity__r.Total_Remaining_Trade_A_P__c)) %>%
+  mutate(Activity__r.Total_Remaining_Discount__c = as.numeric(Activity__r.Total_Remaining_Discount__c)) %>%
+  mutate(Activity__r.Total_Remaining_Volume__c = as.numeric(Activity__r.Total_Remaining_Volume__c)) %>%
+  mutate(Activity__r.Total_Remaining_Free_Bottle__c = as.numeric(Activity__r.Total_Remaining_Free_Bottle__c)) %>%
+  mutate(Promotion_Material_Item__r.Product_Selling_Price__c = as.numeric(Promotion_Material_Item__r.Product_Selling_Price__c)) %>%
+  mutate(Promotion_Material_Item__r.Product_Unit_Cost__c = as.numeric(Promotion_Material_Item__r.Product_Unit_Cost__c)) %>%
+  mutate(Promotion_Material_Item__r.Product_Gross_Selling_Price__c = as.numeric(Promotion_Material_Item__r.Product_Gross_Selling_Price__c)) %>%
+  mutate(Promotion_Material_Item__r.Wholesaler_Discount__c = case_when(is.na(Promotion_Material_Item__r.Wholesaler_Discount__c) ~ 0,
+                                                                       is.null(Promotion_Material_Item__r.Wholesaler_Discount__c) ~ 0,
+                                                                       TRUE ~ as.numeric(Promotion_Material_Item__r.Wholesaler_Discount__c))) %>%
+  mutate(Promotion_Material_Item__r.Plan_Rebate__c = case_when(is.na(Promotion_Material_Item__r.Plan_Rebate__c) ~ 0,
+                                                               is.null(Promotion_Material_Item__r.Plan_Rebate__c) ~ 0,
+                                                               TRUE ~ as.numeric(Promotion_Material_Item__r.Plan_Rebate__c))) %>%
+  mutate(Promotion_Material_Item__r.Plan_Qty__c = as.numeric(Promotion_Material_Item__r.Plan_Qty__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Qty_9L__c = as.numeric(Promotion_Material_Item__r.Plan_Qty_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Target_Qty__c = as.numeric(Promotion_Material_Item__r.Target_Qty__c)) %>%
+  mutate(Promotion_Material_Item__r.Target_Qty_9L__c = as.numeric(Promotion_Material_Item__r.Target_Qty_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Actual_Volume__c = as.numeric(Promotion_Material_Item__r.Total_Actual_Volume__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Outlet_Incentive__c = as.numeric(Promotion_Material_Item__r.Total_Outlet_Incentive__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Outlet_Incentive_9L__c = as.numeric(Promotion_Material_Item__r.Total_Outlet_Incentive_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Product_A_P__c = as.numeric(Promotion_Material_Item__r.Total_Product_A_P__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Product_A_P_9L__c = as.numeric(Promotion_Material_Item__r.Total_Product_A_P_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods__c = as.numeric(Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods_9L__c = as.numeric(Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Product_A_P_Qty_Ex_FreeGoods__c = as.numeric(Promotion_Material_Item__r.Total_Product_A_P_Qty_Ex_FreeGoods__c)) %>%
+  mutate(Promotion_Material_Item__r.Total_Plan_Discount__c = as.numeric(Promotion_Material_Item__r.Total_Plan_Discount__c)) %>%
+  mutate(Promotion_Material_Item__r.COGS__c = as.numeric(Promotion_Material_Item__r.COGS__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_COGS__c = as.numeric(Promotion_Material_Item__r.Plan_COGS__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Gross_Profit__c = as.numeric(Promotion_Material_Item__r.Plan_Gross_Profit__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Gross_Profit_9L__c = as.numeric(Promotion_Material_Item__r.Plan_Gross_Profit_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Net_Sales__c = as.numeric(Promotion_Material_Item__r.Plan_Net_Sales__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Gross_Profit_vs_Plan_Net_Sales__c = as.numeric(Promotion_Material_Item__r.Plan_Gross_Profit_vs_Plan_Net_Sales__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Brand_Profit__c = as.numeric(Promotion_Material_Item__r.Plan_Brand_Profit__c)) %>%
+  mutate(Promotion_Material_Item__r.Plan_Brand_Profit_9L__c = as.numeric(Promotion_Material_Item__r.Plan_Brand_Profit_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.A_P_vs_Plan_Gross_Profit__c = as.numeric(Promotion_Material_Item__r.A_P_vs_Plan_Gross_Profit__c)) %>%
+  mutate(Promotion_Material_Item__r.Free_Bottle_COGS__c = as.numeric(Promotion_Material_Item__r.Free_Bottle_COGS__c)) %>%
+  mutate(Promotion_Material_Item__r.Free_Bottle_COGS_9L__c = as.numeric(Promotion_Material_Item__r.Free_Bottle_COGS_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Free_Bottle_Cost__c = as.numeric(Promotion_Material_Item__r.Free_Bottle_Cost__c)) %>%
+  mutate(Promotion_Material_Item__r.Free_Bottle_Quantity__c = as.numeric(Promotion_Material_Item__r.Free_Bottle_Quantity__c)) %>%
+  mutate(Promotion_Material_Item__r.Free_Bottle_Quantity_9L__c = as.numeric(Promotion_Material_Item__r.Free_Bottle_Quantity_9L__c)) %>%
+  mutate(Promotion_Material_Item__r.Remaining_A_P__c = as.numeric(Promotion_Material_Item__r.Remaining_A_P__c)) %>%
+  mutate(Promotion_Material_Item__r.Remaining_Discount__c = as.numeric(Promotion_Material_Item__r.Remaining_Discount__c)) %>%
+  mutate(Promotion_Material_Item__r.Remaining_Free_Bottle_Qty__c = as.numeric(Promotion_Material_Item__r.Remaining_Free_Bottle_Qty__c)) %>%
+  mutate(Promotion_Material_Item__r.Remaining_Market_A_P__c = as.numeric(Promotion_Material_Item__r.Remaining_Market_A_P__c)) %>%
+  mutate(Promotion_Material_Item__r.Remaining_Trade_A_P__c = as.numeric(Promotion_Material_Item__r.Remaining_Trade_A_P__c)) %>%
+  mutate(Promotion_Material_Item__r.Remaining_Volume__c = as.numeric(Promotion_Material_Item__r.Remaining_Volume__c)) %>%
+  mutate(Price = case_when(is.na(Promotion_Material_Item__r.Product_Gross_Selling_Price__c) ~ Promotion_Material_Item__r.Product_Selling_Price__c,
+                           is.null(Promotion_Material_Item__r.Product_Gross_Selling_Price__c) ~ Promotion_Material_Item__r.Product_Selling_Price__c,
+                           Promotion_Material_Item__r.Product_Gross_Selling_Price__c == 0 ~ Promotion_Material_Item__r.Product_Selling_Price__c,
+                           TRUE ~ Promotion_Material_Item__r.Product_Gross_Selling_Price__c)) %>%
+  mutate(Actual_Sales_Volume_9L__c = as.numeric(Actual_Sales_Volume_9L__c)) %>%
+  mutate(Actual_Gross_Sales = Act_Qty__c * Product_Pack_Qty__c * Price) %>%
+  mutate(Actual_Wholesaler_Discount = Actual_Gross_Sales * Promotion_Material_Item__r.Wholesaler_Discount__c) %>%
+  mutate(Actual_Outlet_Discount = Act_Qty__c * Promotion_Material_Item__r.Plan_Rebate__c) %>%
+  mutate(Actual_Net_Sales = Actual_Gross_Sales - Actual_Wholesaler_Discount - Actual_Outlet_Discount) %>%
+  mutate(FYMonth = ifelse(is.null(fyMonths[Month_Name__c]), "", unlist(fyMonths[Month_Name__c]))) %>%
+  mutate(Actual_Gross_Profit = Actual_Net_Sales - Cost_of_Goods__c) %>%
+  group_by(Promotion_Material_Item__c) %>%
+  select(Id = Id,
+         Name = Name,
+         "A&P Item" = A_P_Item_Product_Name__c,
+         "A&P Item Brand Code" = A_P_Item_Brand_Code__c,
+         "A&P Item Brand Name" = A_P_Item_Brand_Name__c,
+         "Actual Qty" = Act_Qty__c,
+         "Sales Proposal" = Activity__c,
+         "Owner" = Activity__r.Owner.Name,
+         "Team" = Team,
+         "Promotion" = Promotion__c,
+         "AccountId" = Promotion__r.Account__c,
+         "AccountName" = Promotion__r.AccountName__c,
+         "Promotion Material Item" = Promotion_Material_Item__c,
+         "Actual A&P" = Actual_A_P__c,
+         "Actual A&P (9L)" = Actual_A_P_9L__c,
+         "Actual Discount" = Actual_Discount__c,
+         "Actual Discount (9L)" = Actual_Discount_9L__c,
+         "Actual Free Bottle Qty" = Actual_Free_Bottle_Qty__c,
+         "Actual Net Sales" = Actual_Net_Sales,
+         "Actual Sales Volume (9L)" = Actual_Sales_Volume_9L__c,
+         "Payment Status" = Approval_Status__c,
+         "Brand (abbrev)" = Brand_Abbreviation__c,
+         "Brand Code" = Brand_Code__c,
+         "Brand Name" = Brand_Name__c,
+         "Brand Profit" = Brand_Profit__c,
+         "Brand Profit (9L)" = Brand_Profit_9L__c,
+         "Cost of Goods" = Cost_of_Goods__c,
+         "Gross Profit" = Actual_Gross_Profit,
+         "Gross Sales" = Actual_Gross_Sales,
+         "Outlet Discount" = Actual_Outlet_Discount,
+         "Wholesaler Discount ($)" = Actual_Wholesaler_Discount,
+         "Product Gross Selling Price" = Promotion_Material_Item__r.Product_Gross_Selling_Price__c,
+         "Product Selling Price" = Promotion_Material_Item__r.Product_Selling_Price__c,
+         "Price" = Price,
+         "Product Name" = Product_Name__c,
+         "Product Pack Qty" = Product_Pack_Qty__c,
+         "Product Unit Size" = Product_Unit_Size__c,
+         "Price" = Price,
+         "Month Name" = Month_Name__c,
+         "Payment Date" = Payment_Date__c,
+         "Payment Type" = Payment_Type__c,
+         "Period Descriptor" = Period_Descriptor__c,
+         "Vendor" = Vendor_Name__c,
+         "Year" = Year__c,
+         "FY Month" = FYMonth,
+         "SalesProposal Name" = Activity__r.Name,
+         "Begin Date" = Activity__r.Begin_Date__c, 
+         "End Date" = Activity__r.End_Date__c,
+         "Status" = Activity__r.Status__c,
+         "Wholesaler Name" = Activity__r.Wholesaler_Name__c,
+         "Sales Proposal Channel" = Activity__r.Channel__c,
+         "Brand Manager" = Activity__r.Brand_Manager_Name__c,
+         "Sales Manager" = Activity__r.Sales_Manager_Name__c,
+         "Marketing Manager" = Activity__r.Marketing_Manager_Name__c,
+         "Finance Manager" = Activity__r.Finance_Manager_Name__c,
+         "Sales Proposal Total Volume" = Activity__r.Total_Volume__c,
+         "Sales Proposal Total Volume (9L)" = Activity__r.Total_Volume_9L__c,
+         "Sales Proposal Total Discount" = Activity__r.Total_Discount__c,
+         "Sales Proposal Total Discount (9L)" = Activity__r.Total_Discount_9L__c,
+         "Sales Proposal Total A&P Discount" = Activity__r.Total_A_P_Discount__c,
+         "Sales Proposal Total A&P Discount (9L)" = Activity__r.Total_A_P_Discount_9L__c,
+         "Sales Proposal Total Actual Market A&P" = Activity__r.Total_Actual_Market_A_P__c,
+         "Sales Proposal Total Actual Trade A&P" = Activity__r.Total_Actual_Trade_A_P__c,
+         "Sales Proposal Total Market A&P" = Activity__r.Total_Market_A_P__c,
+         "Sales Proposal Total Trade A&P" = Activity__r.Total_Trade_A_P__c,
+         "Sales Proposal Total Discount A&P" = Activity__r.Total_Discount_A_P__c,
+         "Sales Proposal Total Discount A&P (9L)" = Activity__r.Total_Discount_A_P_9L__c,
+         "Sales Proposal Total Discount Ex FreeGoods" = Activity__r.Total_A_P_Discount_Ex_FreeGoods__c,
+         "Sales Proposal Total Discount Ex FreeGoods (9L)" = Activity__r.Total_A_P_Discount_Ex_FreeGoods_9L__c,
+         "Sales Proposal Total Free Bottle Quantity" = Activity__r.Total_Free_Bottle_Quantity__c,
+         "Sales Proposal Total Free Bottle Quantity (9L)" = Activity__r.Total_Free_Bottle_Quantity_9L__c,
+         "Sales Proposal Total Free Bottle Cost" = Activity__r.Total_Free_Bottle_Cost__c,
+         "Sales Proposal Total Free Bottle COGS" = Activity__r.Total_Free_Bottle_COGS__c,
+         "Sales Proposal Total Free Bottle COGS (9L)" = Activity__r.Total_Free_Bottle_COGS_9L__c,
+         "Sales Proposal Total Net Sales" = Activity__r.Total_Net_Sales__c,
+         "Sales Proposal Total Cost of Goods" = Activity__r.Total_Cost_of_Goods__c,
+         "Sales Proposal Total Gross Profit" = Activity__r.Total_Gross_Profit__c,
+         "Sales Proposal Total Gross Profit (9L)" = Activity__r.Total_Gross_Profit_9L__c,
+         "Sales Proposal Total Gross Profit vs Total Net Sales" = Activity__r.Total_Gross_Profit_vs_Total_Net_Sales__c,
+         "Sales Proposal Total Discount A&P vs GP" = Activity__r.Total_Discount_A_P_vs_GP__c,
+         "Sales Proposal Total Brand Profit" = Activity__r.Total_Brand_Profit__c,
+         "Sales Proposal Total Brand Profit (9L)" = Activity__r.Total_Brand_Profit_9L__c,
+         "Sales Proposal Total Remaining A&P" = Activity__r.Total_Remaining_A_P__c,
+         "Sales Proposal Total Remaining Market A&P" = Activity__r.Total_Remaining_Market_A_P__c,
+         "Sales Proposal Total Remaining Trade A&P" = Activity__r.Total_Remaining_Trade_A_P__c,
+         "Sales Proposal Total Remaining Discount" = Activity__r.Total_Remaining_Discount__c,
+         "Sales Proposal Total Remaining Volume" = Activity__r.Total_Remaining_Volume__c,
+         "Sales Proposal Total Remaining Free Bottle" = Activity__r.Total_Remaining_Free_Bottle__c,
+         "Account ID" = Promotion__r.Account__c,
+         "Account Name" = Promotion__r.AccountName__c,
+         "Account Region" = Promotion__r.Account_Region__c,
+         "Account Area" = Promotion__r.Area__c,
+         "Account City" = Promotion__r.City__c,
+         "Account Group" = Promotion__r.Group__c,
+         "Account Outlet Class" = Promotion__r.Outlet_Class__c,
+         "Account SubGroup" = Promotion__r.SubGroup__c,
+         "Product ID" = Promotion_Material_Item__r.Product_Custom__c,
+         "Product Selling Price" = Promotion_Material_Item__r.Product_Selling_Price__c,
+         "Product Unit Cost" = Promotion_Material_Item__r.Product_Unit_Cost__c,
+         "Product Gross Selling Price" = Promotion_Material_Item__r.Product_Gross_Selling_Price__c,
+         "Wholesaler Discount" = Promotion_Material_Item__r.Wholesaler_Discount__c,
+         "Plan Rebate" = Promotion_Material_Item__r.Plan_Rebate__c,
+         "Plan Qty" = Promotion_Material_Item__r.Plan_Qty__c,
+         "Plan Qty (9L)" = Promotion_Material_Item__r.Plan_Qty_9L__c,
+         "Target Qty" = Promotion_Material_Item__r.Target_Qty__c,
+         "Target Qty (9L)" = Promotion_Material_Item__r.Target_Qty_9L__c,
+         "Total Actual Volume" = Promotion_Material_Item__r.Total_Actual_Volume__c,
+         "Total Outlet Incentive" = Promotion_Material_Item__r.Total_Outlet_Incentive__c,
+         "Total Outlet Incentive (9L)" = Promotion_Material_Item__r.Total_Outlet_Incentive_9L__c,
+         "Total Product A&P" = Promotion_Material_Item__r.Total_Product_A_P__c,
+         "Total Product A&P (9L)" = Promotion_Material_Item__r.Total_Product_A_P_9L__c,
+         "Total Product A&P Excluding FreeGoods" = Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods__c,
+         "Total Product A&P Excluding FreeGoods (9L)" = Promotion_Material_Item__r.Total_Product_A_P_Excluding_FreeGoods_9L__c,
+         "Total Product A&P Qty Ex FreeGoods" = Promotion_Material_Item__r.Total_Product_A_P_Qty_Ex_FreeGoods__c,
+         "Total Plan Discount" = Promotion_Material_Item__r.Total_Plan_Discount__c,
+         "Product COGS" = Promotion_Material_Item__r.COGS__c,
+         "Product Plan COGS" = Promotion_Material_Item__r.Plan_COGS__c,
+         "Plan Gross Profit" = Promotion_Material_Item__r.Plan_Gross_Profit__c,
+         "Plan Gross Profit (9L)" = Promotion_Material_Item__r.Plan_Gross_Profit_9L__c,
+         "Plan Net Sales" = Promotion_Material_Item__r.Plan_Net_Sales__c,
+         "Plan Gross Profit vs Plan Net Sales" = Promotion_Material_Item__r.Plan_Gross_Profit_vs_Plan_Net_Sales__c,
+         "Plan Brand Profit" = Promotion_Material_Item__r.Plan_Brand_Profit__c,
+         "Plan Brand Profit (9L)" = Promotion_Material_Item__r.Plan_Brand_Profit_9L__c,
+         "A&P vs Plan Gross Profit" = Promotion_Material_Item__r.A_P_vs_Plan_Gross_Profit__c,
+         "Free Bottle COGS" = Promotion_Material_Item__r.Free_Bottle_COGS__c,
+         "Free Bottle COGS (9L)" = Promotion_Material_Item__r.Free_Bottle_COGS_9L__c,
+         "Free Bottle Cost" = Promotion_Material_Item__r.Free_Bottle_Cost__c,
+         "Free Bottle Quantity" = Promotion_Material_Item__r.Free_Bottle_Quantity__c,
+         "Free Bottle Quantity (9L)" = Promotion_Material_Item__r.Free_Bottle_Quantity_9L__c,
+         "Remaining A&P" = Promotion_Material_Item__r.Remaining_A_P__c,
+         "Remaining Discount" = Promotion_Material_Item__r.Remaining_Discount__c,
+         "Remaining Free Bottle Qty" = Promotion_Material_Item__r.Remaining_Free_Bottle_Qty__c,
+         "Remaining Market A&P" = Promotion_Material_Item__r.Remaining_Market_A_P__c,
+         "Remaining Trade A&P" = Promotion_Material_Item__r.Remaining_Trade_A_P__c,
+         "Remaining Volume" = Promotion_Material_Item__r.Remaining_Volume__c) -> df.actuals_output
+
+  
+# Write csv
+write.csv(df.pmi_output, "~/Documents/Development/R/Korea_SalesProposal_Products.csv", row.names = F, na = "")
+write.csv(df.actuals_output, "~/Documents/Development/R/Korea_SalesProposal_Actuals.csv", row.names = F, na = "")
+```
